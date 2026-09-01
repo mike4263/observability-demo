@@ -1,0 +1,59 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: quay-deploy-pipeline
+  namespace: demo
+spec:
+  params:
+    - name: image-repository
+      type: string
+    - name: image-tag
+      type: string
+    - name: quay-repository
+      type: string
+      default: mike/demo
+    - name: git-url
+      type: string
+      default: https://github.com/mike4263/demo-service
+    - name: git-revision
+      type: string
+      default: main
+    - name: values-file
+      type: string
+      default: observability-demo/values.yaml
+    - name: github-repo
+      type: string
+      default: mike4263/demo-service
+  workspaces:
+    - name: shared-workspace
+  tasks:
+    - name: clone
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+    - name: update-values-and-pr
+      runAfter:
+        - clone
+      taskRef:
+        name: update-values-pr
+      params:
+        - name: image-repository
+          value: $(params.image-repository)
+        - name: image-tag
+          value: $(params.image-tag)
+        - name: values-file
+          value: $(params.values-file)
+        - name: base-branch
+          value: $(params.git-revision)
+        - name: github-repo
+          value: $(params.github-repo)
+      workspaces:
+        - name: source
+          workspace: shared-workspace

@@ -1,0 +1,90 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: update-values-pr
+  namespace: demo
+spec:
+  params:
+    - name: image-repository
+      type: string
+    - name: image-tag
+      type: string
+    - name: values-file
+      type: string
+      default: observability-demo/values.yaml
+    - name: base-branch
+      type: string
+      default: main
+    - name: github-repo
+      type: string
+      default: mike4263/demo-service
+  workspaces:
+    - name: source
+  steps:
+    - name: update-values
+      image: docker.io/mikefarah/yq:4.44.3
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/usr/bin/env sh
+        set -euo pipefail
+
+        yq -i '.image.repository = "$(params.image-repository)"' "$(params.values-file)"
+        yq -i '.image.tag = "$(params.image-tag)"' "$(params.values-file)"
+
+        echo "Updated $(params.values-file):"
+        cat "$(params.values-file)"
+    - name: commit-and-open-pr
+      image: alpine/git:2.45.2
+      workingDir: $(workspaces.source.path)
+      env:
+        - name: GIT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: github-pat
+              key: username
+        - name: GIT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-pat
+              key: token
+      script: |
+        #!/usr/bin/env sh
+        set -euo pipefail
+
+        apk add --no-cache curl jq
+
+        AUTH_USER="$(curl -fsS -H "Authorization: Bearer ${GIT_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          https://api.github.com/user | jq -r '.login')"
+        echo "Authenticated as GitHub user: ${AUTH_USER}"
+
+        REPO_JSON="$(curl -fsS -H "Authorization: Bearer ${GIT_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/$(params.github-repo)")"
+        CAN_PUSH="$(echo "${REPO_JSON}" | jq -r '.permissions.push // false')"
+        if [ "${CAN_PUSH}" != "true" ]; then
+          echo "ERROR: GitHub token for ${AUTH_USER} does not have push permission on $(params.github-repo)."
+          echo "Classic PAT: enable the 'repo' scope."
+          echo "Fine-grained PAT: grant Contents (Read and write) and Pull requests (Read and write) on this repository."
+          echo "If the repo is in an org with SSO, authorize the token at https://github.com/settings/tokens"
+          exit 1
+        fi
+
+        git config user.email "tekton@openshift.local"
+        git config user.name "Tekton CI"
+
+        BRANCH="quay-update-$(params.image-tag)-$(date +%s)"
+        git checkout -b "${BRANCH}"
+        git add "$(params.values-file)"
+        git commit -m "chore: update image to $(params.image-repository):$(params.image-tag)"
+
+        git remote set-url origin "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/$(params.github-repo).git"
+        git push -u origin "${BRANCH}"
+
+        curl -fsS -X POST \
+          -H "Authorization: Bearer ${GIT_TOKEN}" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/$(params.github-repo)/pulls" \
+          -d "{\"title\":\"Update image tag to $(params.image-tag)\",\"head\":\"${BRANCH}\",\"base\":\"$(params.base-branch)\",\"body\":\"Automated update from Quay webhook push for $(params.image-repository):$(params.image-tag).\"}"
+
+        echo "Pull request created for branch ${BRANCH}"

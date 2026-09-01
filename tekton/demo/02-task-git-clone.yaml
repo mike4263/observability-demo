@@ -1,0 +1,42 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: git-clone
+  namespace: demo
+spec:
+  params:
+    - name: url
+      type: string
+      default: https://github.com/mike4263/demo-service
+    - name: revision
+      type: string
+      default: main
+  workspaces:
+    - name: output
+  steps:
+    - name: clone
+      image: alpine/git:2.45.2
+      env:
+        - name: GIT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: github-pat
+              key: username
+        - name: GIT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-pat
+              key: token
+      script: |
+        #!/usr/bin/env sh
+        set -euo pipefail
+
+        REPO_PATH="$(workspaces.output.path)"
+
+        # PVC workspaces persist between PipelineRuns; clear before clone.
+        find "${REPO_PATH}" -mindepth 1 -delete
+
+        cd "${REPO_PATH}"
+
+        CLONE_URL="https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/mike4263/demo-service.git"
+        git clone --branch "$(params.revision)" --depth 1 "${CLONE_URL}" .

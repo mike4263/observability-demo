@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenShift Observability Demo</title>
+    <style>
+        :root {
+            --bg: #0f1419;
+            --surface: #1a2332;
+            --border: #2d3a4f;
+            --text: #e6edf3;
+            --muted: #8b9cb3;
+            --accent: #ee0000;
+            --accent-hover: #cc0000;
+            --success: #3fb950;
+            --warn: #d29922;
+            --error: #f85149;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Red Hat Text", "Segoe UI", sans-serif;
+            background: linear-gradient(160deg, #0f1419 0%, #1a2332 100%);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 3rem;
+        }
+
+        header {
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            margin: 0 0 0.5rem;
+            font-size: 1.75rem;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin: 0;
+        }
+
+        section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        h2 {
+            margin: 0 0 1rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        label {
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.95rem;
+        }
+
+        input[type="number"] {
+            width: 5rem;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 0.55rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+        }
+
+        button.secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        button.secondary:hover {
+            border-color: var(--muted);
+        }
+
+        button.warn {
+            background: #9a6700;
+        }
+
+        button.error {
+            background: #b62324;
+        }
+
+        button.trace {
+            background: #1f6feb;
+        }
+
+        button.trace:hover {
+            background: #388bfd;
+        }
+
+        .status {
+            min-height: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .status.success {
+            color: var(--success);
+        }
+
+        .status.error {
+            color: var(--error);
+        }
+
+        .links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .links a {
+            color: #79c0ff;
+            text-decoration: none;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>OpenShift Observability Demo</h1>
+            <p class="subtitle">Generate CPU load and log events to exercise logging, metrics, health checks, and tracing.</p>
+        </header>
+
+        <section>
+            <h2>CPU Load</h2>
+            <div class="controls">
+                <label for="threads">Threads</label>
+                <input type="number" id="threads" min="1" max="4" value="1">
+                <label for="duration">Duration (s)</label>
+                <input type="number" id="duration" min="1" max="60" value="10">
+            </div>
+            <div class="controls">
+                <button onclick="startCpuLoad(1, 5)">Light (1 thread, 5s)</button>
+                <button onclick="startCpuLoad(2, 15)">Medium (2 threads, 15s)</button>
+                <button class="warn" onclick="startCpuLoad(4, 30)">Heavy (4 threads, 30s)</button>
+                <button class="secondary" onclick="startCpuLoadCustom()">Start Custom Load</button>
+            </div>
+            <div id="cpu-status" class="status"></div>
+        </section>
+
+        <section>
+            <h2>Logging</h2>
+            <div class="controls">
+                <input type="text" id="log-message" placeholder="Custom log message" value="Demo log event from observability app">
+            </div>
+            <div class="controls">
+                <button class="secondary" onclick="emitLog('DEBUG')">DEBUG</button>
+                <button onclick="emitLog('INFO')">INFO</button>
+                <button class="warn" onclick="emitLog('WARN')">WARN</button>
+                <button class="error" onclick="emitLog('ERROR')">ERROR</button>
+                <button class="secondary" onclick="emitBurst()">Burst (10 mixed)</button>
+            </div>
+            <div id="log-status" class="status"></div>
+        </section>
+
+        <section>
+            <h2>Tracing (OpenTelemetry)</h2>
+            <div class="controls">
+                <input type="text" id="trace-name" placeholder="Span name" value="demo-trace-event">
+                <input type="text" id="trace-error-message" placeholder="Error message" value="Simulated error for observability demo">
+            </div>
+            <div class="controls">
+                <button class="trace" onclick="emitTrace('simple')">Simple Span</button>
+                <button class="trace" onclick="emitTrace('nested')">Nested Spans</button>
+                <button class="error" onclick="emitTrace('error')">Error Span</button>
+                <button class="warn" onclick="emitTrace('slow')">Slow Trace (500ms)</button>
+                <button class="secondary" onclick="emitTrace('burst')">Burst (5 traces)</button>
+            </div>
+            <div id="trace-status" class="status"></div>
+        </section>
+
+        <section>
+            <h2>Observability Endpoints</h2>
+            <div class="links">
+                <a href="/q/health" target="_blank">Health</a>
+                <a href="/q/health/live" target="_blank">Liveness</a>
+                <a href="/q/health/ready" target="_blank">Readiness</a>
+                <a href="/q/metrics" target="_blank">Prometheus Metrics</a>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        async function startCpuLoad(threads, duration) {
+            document.getElementById('threads').value = threads;
+            document.getElementById('duration').value = duration;
+            await startCpuLoadCustom();
+        }
+
+        async function startCpuLoadCustom() {
+            const status = document.getElementById('cpu-status');
+            const threads = document.getElementById('threads').value;
+            const duration = document.getElementById('duration').value;
+
+            status.textContent = 'Starting CPU load...';
+            status.className = 'status';
+
+            try {
+                const response = await fetch(`/api/cpu/load?threads=${threads}&durationSeconds=${duration}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    status.textContent = `${data.message} (${data.threads} threads, ${data.durationSeconds}s)`;
+                    status.className = 'status success';
+                } else {
+                    status.textContent = data.message || 'Failed to start CPU load';
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+                status.className = 'status error';
+            }
+        }
+
+        async function emitLog(level) {
+            const status = document.getElementById('log-status');
+            const message = encodeURIComponent(document.getElementById('log-message').value);
+
+            status.textContent = `Emitting ${level} log...`;
+            status.className = 'status';
+
+            try {
+                const response = await fetch(`/api/logs?level=${level}&message=${message}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    status.textContent = `Emitted ${data.count} ${data.level} log(s)`;
+                    status.className = 'status success';
+                } else {
+                    status.textContent = 'Failed to emit log';
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+                status.className = 'status error';
+            }
+        }
+
+        async function emitBurst() {
+            const status = document.getElementById('log-status');
+            status.textContent = 'Emitting log burst...';
+            status.className = 'status';
+
+            try {
+                const response = await fetch('/api/logs/burst?count=10', { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok) {
+                    status.textContent = `Emitted burst of ${data.count} mixed-level logs`;
+                    status.className = 'status success';
+                } else {
+                    status.textContent = 'Failed to emit burst';
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+                status.className = 'status error';
+            }
+        }
+
+        async function emitTrace(type) {
+            const status = document.getElementById('trace-status');
+            status.textContent = `Sending ${type} trace to OpenTelemetry...`;
+            status.className = 'status';
+
+            let url = `/api/traces/${type}`;
+            if (type === 'simple') {
+                const name = encodeURIComponent(document.getElementById('trace-name').value);
+                url += `?name=${name}`;
+            } else if (type === 'error') {
+                const message = encodeURIComponent(document.getElementById('trace-error-message').value);
+                url += `?message=${message}`;
+            } else if (type === 'slow') {
+                url += '?delayMs=500';
+            } else if (type === 'burst') {
+                url += '?count=5';
+            }
+
+            try {
+                const response = await fetch(url, { method: 'POST' });
+                const data = await response.json();
+
+                if (response.ok) {
+                    status.textContent = `${data.message} traceId=${data.traceId} spanId=${data.spanId}`;
+                    status.className = 'status success';
+                } else {
+                    status.textContent = 'Failed to send trace';
+                    status.className = 'status error';
+                }
+            } catch (error) {
+                status.textContent = `Error: ${error.message}`;
+                status.className = 'status error';
+            }
+        }
+    </script>
+</body>
+</html>

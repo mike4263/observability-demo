@@ -1,0 +1,26 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: observability-demo
+  labels:
+    app: observability-demo
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: observability-demo
+  labels:
+    app: observability-demo
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: observability-demo:latest
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Containerfile
+  triggers:
+    - type: ConfigChange

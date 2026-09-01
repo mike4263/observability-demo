@@ -1,0 +1,34 @@
+# Apply all Tekton resources:
+#   oc apply -f tekton/demo/
+#
+# Before triggering, create/update the GitHub PAT secret:
+#   oc create secret generic github-pat -n demo \
+#     --from-literal=username=mike4263 \
+#     --from-literal=token=YOUR_GITHUB_PAT \
+#     --dry-run=client -o yaml | oc apply -f -
+#
+# Required GitHub token permissions:
+#   Classic PAT: check the "repo" scope (full control of private repositories)
+#   Fine-grained PAT:
+#     - Repository access: mike4263/demo-service
+#     - Contents: Read and write
+#     - Pull requests: Read and write
+#   If the repo is under an org with SAML SSO, authorize the token at:
+#     https://github.com/settings/tokens
+#
+# Webhook URL (configure in Quay repository notifications):
+#   https://quay-webhook-listener-demo.apps.cluster-m8w6t.dyn.redhatworkshops.io
+#
+# Quay settings:
+#   - Event: Repository push
+#   - Method: Webhook POST
+#
+# Pipeline flow on Quay push:
+#   1. Clone https://github.com/mike4263/demo-service
+#   2. Use yq to update charts/observability-demo/values.yaml (image.repository + image.tag)
+#   3. Commit, push branch, and open a GitHub pull request
+#
+# Test with a sample payload:
+#   curl -sk -X POST https://quay-webhook-listener-demo.apps.cluster-m8w6t.dyn.redhatworkshops.io \
+#     -H "Content-Type: application/json" \
+#     -d '{"repository":"mike/demo","namespace":"mike","docker_url":"example-registry-quay-openshift-operators.apps.cluster-m8w6t.dyn.redhatworkshops.io/mike/demo","updated_tags":["0.0.2"]}'

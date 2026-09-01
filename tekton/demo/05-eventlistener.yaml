@@ -1,0 +1,20 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: quay-webhook-listener
+  namespace: demo
+spec:
+  serviceAccountName: pipeline-sa
+  triggers:
+    - name: quay-push-trigger
+      interceptors:
+        - ref:
+            name: cel
+            kind: ClusterInterceptor
+          params:
+            - name: filter
+              value: "body.repository == 'mike/demo' && has(body.updated_tags) && size(body.updated_tags) > 0"
+      bindings:
+        - ref: quay-push-binding
+      template:
+        ref: quay-deploy-template

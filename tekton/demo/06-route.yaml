@@ -1,0 +1,18 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: quay-webhook-listener
+  namespace: demo
+  labels:
+    app.kubernetes.io/name: quay-webhook-listener
+    app.kubernetes.io/part-of: observability-demo
+spec:
+  to:
+    kind: Service
+    name: el-quay-webhook-listener
+    weight: 100
+  port:
+    targetPort: http-listener
+  tls:
+    termination: edge
+  wildcardPolicy: None
